@@ -4,11 +4,11 @@ on:
   schedule:
   - cron: "0 0 * * *"
   workflow_dispatch:
+  push:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'VladGud' || github.event_name == 'workflow_dispatch' }}
     env:
       OPENSSL_BRANCH: openssl-3.4.2
       USE_RPATH: yes
