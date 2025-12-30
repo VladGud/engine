@@ -1,0 +1,52 @@
+name: CI
+on:
+    push:
+    pull_request:
+    schedule:
+        - cron: '0 2 * * 0'
+
+env:
+    OPENSSL_BRANCH: openssl-3.6.0
+    USE_RPATH: yes
+    PATCH_OPENSSL: 0
+    GOST_PROVIDER_ENABLE_ONLINE_TESTS: 1
+
+jobs:
+    gcc-openssl-stable:
+        runs-on: self-hosted
+        if: ${{ github.event_name != 'schedule' }}
+        env:
+            PATCH_OPENSSL: 1
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                  submodules: true
+            - run: .github/before_script.sh
+            - run: .github/script.sh
+
+    clang-openssl-stable:
+        runs-on: self-hosted
+        if: ${{ github.event_name != 'schedule' }}
+        env:
+            CC: clang
+            PATCH_OPENSSL: 1
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                  submodules: true
+            - run: .github/before_script.sh
+            - run: .github/script.sh
+
+    gcc-asan-openssl-stable:
+        runs-on: self-hosted
+        if: ${{ github.event_name != 'schedule' }}
+        env:
+            ASAN: -DASAN=1
+            PATCH_OPENSSL: 1
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                  submodules: true
+            - run: .github/before_script.sh
+            - run: .github/script.sh
+
