@@ -11,12 +11,7 @@ if [ "${APT_INSTALL-}" ]; then
     sudo apt-get install -y $APT_INSTALL
 fi
 
-git clone --depth 1 -b $OPENSSL_BRANCH https://github.com/openssl/openssl.git
-if [ "${PATCH_OPENSSL}" == "1" ]; then
-    git apply patches/openssl-tls1.3.patch
-    git apply patches/openssl-asn1_item_verify_ctx.patch
-    git apply patches/openssl-x509_sig_info_init.patch
-fi
+git clone --depth 1 -b add-gost-tls13 https://github.com/VladGud/openssl.git
 cd openssl
 git describe --always --long
 
