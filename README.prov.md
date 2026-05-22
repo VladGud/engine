@@ -43,6 +43,8 @@ Keymgmt:
 - id-GostR3410-2001DH ("GOST R 34.10-2001 DH", "1.2.643.2.2.98")
 - gost2012_256 ("GOST R 34.10-2012 with 256 bit modulus", "1.2.643.7.1.1.1.1")
 - gost2012_512 ("GOST R 34.10-2012 with 512 bit modulus", "1.2.643.7.1.1.1.2")
+- gostr34102012_256a / gostr34102012_256b / gostr34102012_256c / gostr34102012_256d (TLS paramset-specific identities for 2012-256)
+- gostr34102012_512a / gostr34102012_512b / gostr34102012_512c (TLS paramset-specific identities for 2012-512)
 
 Encoder:
 - id-GostR3410-2001 ("GOST R 34.10-2001", "1.2.643.2.2.19") with structure format = pem/der/text
@@ -65,7 +67,13 @@ PrivateKeyInfo can only be loaded in pkcs8 format without decryption.
 Signature:
 - SN_id_GostR3410_2001, "id-GostR3411-94-with-GostR3410-2001", "GOST R 34.11-94 with GOST R 34.10-2001", "1.2.643.2.2.3"
 - SN_id_GostR3410_2012_256, "id-tc26-signwithdigest-gost3410-2012-256", "GOST R 34.10-2012 with GOST R 34.11-2012 (256 bit)", "1.2.643.7.1.1.3.2"
-- gost2012_256, "id-tc26-signwithdigest-gost3410-2012-512", "GOST R 34.10-2012 with GOST R 34.11-2012 (512 bit)", "1.2.643.7.1.1.3.3"
+- SN_id_GostR3410_2012_512, "id-tc26-signwithdigest-gost3410-2012-512", "GOST R 34.10-2012 with GOST R 34.11-2012 (512 bit)", "1.2.643.7.1.1.3.3"
+- gostr34102012_256a / gostr34102012_256b / gostr34102012_256c / gostr34102012_256d (canonical TLS/provider signature identities for 2012-256 paramsets)
+- gostr34102012_512a / gostr34102012_512b / gostr34102012_512c (canonical TLS/provider signature identities for 2012-512 paramsets)
+
+Compatibility contract:
+- generic `gost2012_256` / `gost2012_512` keymgmt names and generic `SN_id_GostR3410_2012_256` / `SN_id_GostR3410_2012_512` signature names remain available for backward compatibility and non-TLS flows;
+- TLS-specific provider routing uses canonical IANA-style identities `gostr34102012_256a/b/c/d` and `gostr34102012_512a/b/c` end-to-end across TLS capability, signature registration, and keymgmt query-operation-name matching.
 
 Keyexchange:
 - ECDHE

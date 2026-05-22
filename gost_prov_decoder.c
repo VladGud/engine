@@ -229,11 +229,16 @@ static int decoder_decode(void *ctx, OSSL_CORE_BIO *cbio, int selection,
         goto exit;
     }
 
+    const GOST_TLS_SIGALG_DESC *sigalg_desc =
+        gost_tls_sigalg_desc_by_paramset(key_data->type, key_data->param_nid);
+    const char *data_type = sigalg_desc != NULL ? sigalg_desc->keymgmt_name
+                                                : OBJ_nid2sn(key_data->type);
+
     OSSL_PARAM params[4];
     int object_type = OSSL_OBJECT_PKEY;
     params[0] = OSSL_PARAM_construct_int(OSSL_OBJECT_PARAM_TYPE, &object_type);
     params[1] = OSSL_PARAM_construct_utf8_string(OSSL_OBJECT_PARAM_DATA_TYPE,
-                                                 (char *)OBJ_nid2sn(key_data->type), 0);
+                                                 (char *)data_type, 0);
     params[2] = OSSL_PARAM_construct_octet_string(OSSL_OBJECT_PARAM_REFERENCE,
                                                   &key_data, sizeof(key_data));
     params[3] = OSSL_PARAM_construct_end();
