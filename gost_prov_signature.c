@@ -361,8 +361,11 @@ static int signature_digest_sign_final(void *vctx, unsigned char *sig,
         || ctx->operation != SIGN_OPERATION)
         return 0;
 
-    if (sig != NULL
-        && !EVP_DigestFinal_ex(ctx->mdctx, digest, &dlen))
+    if (sig == NULL)
+        return internal_pkey_ec_cp_sign(ctx->key_data->ec, ctx->key_data->type,
+                                        NULL, siglen, NULL, 0);
+
+    if (!EVP_DigestFinal_ex(ctx->mdctx, digest, &dlen))
         return 0;
 
     *siglen = sigsize;
