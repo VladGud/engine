@@ -7,20 +7,19 @@
 
 static const char test_cert_pem[] =
     "-----BEGIN CERTIFICATE-----\n"
-    "MIIBbTCCARgCFCwPZ2ufyPD4w6L9+gIW0bxgc9VKMAwGCCqFAwcBAQMCBQAwNDES\n"
-    "MBAGA1UEAwwJbG9jYWxob3N0MQ0wCwYDVQQKDARUZXN0MQ8wDQYDVQQLDAZUTFMx\n"
-    "LjMwHhcNMjUwNDE0MTUxNDIzWhcNMjYwNDE0MTUxNDIzWjA0MRIwEAYDVQQDDAls\n"
-    "b2NhbGhvc3QxDTALBgNVBAoMBFRlc3QxDzANBgNVBAsMBlRMUzEuMzBmMB8GCCqF\n"
-    "AwcBAQEBMBMGByqFAwICIwEGCCqFAwcBAQICA0MABEBmhmqMH3rbH6kjPLR7iUwo\n"
-    "uJqFtsP52CSDz8gJVp1PyW6dzV8EbClmFlI0aJdyyEQ55SlAAGrOOwfSV3aDQjul\n"
-    "MAwGCCqFAwcBAQMCBQADQQBlxklUm4GF2/ReRw+H9HfJrTFn2lw6Ohv2+WMQKCUl\n"
-    "JAxWHymeIDaow5oF8Sv2iCO/dUrkab4LYgxRZFrge4mD\n"
+    "MIIBMTCB3aADAgECAhQY7XDbR82GfAZ4RF2P4xnKrqVdvjAMBggqhQMHAQEDAgUA\n"
+    "MBgxFjAUBgNVBAMMDUdPU1QgVENBIFRlc3QwHhcNMjYwNTIxMTUxNDE1WhcNMzYw\n"
+    "NTE4MTUxNDE1WjAYMRYwFAYDVQQDDA1HT1NUIFRDQSBUZXN0MF4wFwYIKoUDBwEB\n"
+    "AQEwCwYJKoUDBwECAQEBA0MABECR1jnPZkS9Kc1ZGpyO8bl0B+mug0XS4jNRLcvt\n"
+    "fD0s8ctQy81k8WdZ3O5OwrZbNdHWqXypUejZaGKkcFnm5XjeMAwGCCqFAwcBAQMC\n"
+    "BQADQQAW2NMdKuEqh6lM+eqdgCgn6m69D6pwyduXdQUqMnSzqTc+/ZuXaAHo0hvT\n"
+    "ZMgStBsIJxzn91bdGIuRkXL0mEdJ\n"
     "-----END CERTIFICATE-----";
 
 static const char test_key_pem[] =
     "-----BEGIN PRIVATE KEY-----\n"
-    "MEYCAQAwHwYIKoUDBwEBAQEwEwYHKoUDAgIjAQYIKoUDBwEBAgIEIIouOKJ+r8nY\n"
-    "nBM5uRJ3opU7kclTm2FzsexlIt6BPpbq\n"
+    "MD4CAQAwFwYIKoUDBwEBAQEwCwYJKoUDBwECAQEBBCAo5MRrrjDiIxOBG2WcByy4\n"
+    "c5yKStMejFkTUkma3vkYNw==\n"
     "-----END PRIVATE KEY-----";
 
 int load_cert_and_key_from_strings(SSL_CTX *ctx,
@@ -86,8 +85,26 @@ static int create_ctx_pair(SSL_CTX **server_ctx, SSL_CTX **client_ctx)
     SSL_CTX_set_min_proto_version(*client_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(*client_ctx, TLS1_3_VERSION);
 
-    SSL_CTX_set_cipher_list(*server_ctx, "TLS_GOSTR341112_256_WITH_MAGMA_MGM_L");
-    SSL_CTX_set_cipher_list(*client_ctx, "TLS_GOSTR341112_256_WITH_MAGMA_MGM_L");
+    if (!SSL_CTX_set_ciphersuites(*server_ctx, "TLS_GOSTR341112_256_WITH_MAGMA_MGM_L")) {
+        fprintf(stderr, "SSL_CTX_set_ciphersuites(server) failed\n");
+        ERR_print_errors_fp(stderr);
+        return 0;
+    }
+    if (!SSL_CTX_set_ciphersuites(*client_ctx, "TLS_GOSTR341112_256_WITH_MAGMA_MGM_L")) {
+        fprintf(stderr, "SSL_CTX_set_ciphersuites(client) failed\n");
+        ERR_print_errors_fp(stderr);
+        return 0;
+    }
+    if (!SSL_CTX_set1_groups_list(*server_ctx, "GC256A")) {
+        fprintf(stderr, "SSL_CTX_set1_groups_list(server) failed\n");
+        ERR_print_errors_fp(stderr);
+        return 0;
+    }
+    if (!SSL_CTX_set1_groups_list(*client_ctx, "GC256A")) {
+        fprintf(stderr, "SSL_CTX_set1_groups_list(client) failed\n");
+        ERR_print_errors_fp(stderr);
+        return 0;
+    }
 
     SSL_CTX_set_num_tickets(*server_ctx, 1);
 

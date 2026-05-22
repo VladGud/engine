@@ -52,6 +52,7 @@ typedef struct {
     EVP_MD_CTX *mdctx;
     EVP_MD *md;
     int operation;
+    int tls_version;
 } GOST_SIGNATURE_CTX;
 
 typedef struct {
@@ -94,6 +95,7 @@ static void *signature_newctx(void *vprovctx, const char *propq)
         return NULL;
     }
 
+    ctx->tls_version = 0;
     return ctx;
 }
 
@@ -158,6 +160,10 @@ static int signature_set_ctx_params(void *vctx, const OSSL_PARAM params[])
         return 0;
 
     if ((p != NULL || propsp != NULL) && !signature_setup_md(ctx, mdname, mdprops))
+        return 0;
+
+    p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_TLS_VERSION);
+    if (p != NULL && !OSSL_PARAM_get_int(p, &ctx->tls_version))
         return 0;
 
     return 1;
@@ -238,9 +244,21 @@ static const OSSL_PARAM signature_gettable_params[] = {
     OSSL_PARAM_END
 };
 
+static const OSSL_PARAM signature_settable_params[] = {
+    OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_DIGEST, NULL, 0),
+    OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_PROPERTIES, NULL, 0),
+    OSSL_PARAM_int(OSSL_SIGNATURE_PARAM_TLS_VERSION, NULL),
+    OSSL_PARAM_END
+};
+
 static const OSSL_PARAM *signature_gettable_ctx_params(void *vctx, void *provctx)
 {
     return signature_gettable_params;
+}
+
+static const OSSL_PARAM *signature_settable_ctx_params(void *vctx, void *provctx)
+{
+    return signature_settable_params;
 }
 
 static int signature_signverify_init(GOST_SIGNATURE_CTX *ctx, void *key_data,
@@ -255,6 +273,7 @@ static int signature_signverify_init(GOST_SIGNATURE_CTX *ctx, void *key_data,
         return 0;
 
     ctx->operation = operation;
+    ctx->tls_version = 0;
 
     if (!signature_set_ctx_params(ctx, params))
         return 0;
@@ -334,6 +353,7 @@ static int signature_digest_sign_final(void *vctx, unsigned char *sig,
     GOST_SIGNATURE_CTX *ctx = vctx;
     unsigned char digest[EVP_MAX_MD_SIZE];
     unsigned int dlen = 0;
+    int ret;
 
     if (!ctx
         || !ctx->mdctx
@@ -341,13 +361,23 @@ static int signature_digest_sign_final(void *vctx, unsigned char *sig,
         || ctx->operation != SIGN_OPERATION)
         return 0;
 
-    if (sig != NULL
-        && !EVP_DigestFinal_ex(ctx->mdctx, digest, &dlen))
+    if (sig == NULL)
+        return internal_pkey_ec_cp_sign(ctx->key_data->ec, ctx->key_data->type,
+                                        NULL, siglen, NULL, 0);
+
+    if (!EVP_DigestFinal_ex(ctx->mdctx, digest, &dlen))
         return 0;
 
     *siglen = sigsize;
-    return internal_pkey_ec_cp_sign(ctx->key_data->ec, ctx->key_data->type, sig,
-                                    siglen, digest, dlen);
+    ret = internal_pkey_ec_cp_sign(ctx->key_data->ec, ctx->key_data->type, sig,
+                                   siglen, digest, dlen);
+    if (ret <= 0)
+        return ret;
+
+    if (sig != NULL && ctx->tls_version > 0)
+        BUF_reverse(sig, NULL, *siglen);
+
+    return ret;
 }
 
 static int signature_digest_verify_init(void *ctx, const char *mdname,
@@ -374,6 +404,9 @@ static int signature_digest_verify_final(void *vctx, const unsigned char *sig,
     GOST_SIGNATURE_CTX *ctx = vctx;
     unsigned char digest[EVP_MAX_MD_SIZE];
     unsigned int dlen = 0;
+    unsigned char *sigbuf = NULL;
+    const unsigned char *verify_sig = sig;
+    int ret;
 
     if (!sig || !ctx || !ctx->mdctx || ctx->operation != VERIFY_OPERATION)
         return 0;
@@ -381,7 +414,17 @@ static int signature_digest_verify_final(void *vctx, const unsigned char *sig,
     if (!EVP_DigestFinal_ex(ctx->mdctx, digest, &dlen))
         return 0;
 
-    return internal_pkey_ec_cp_verify(ctx->key_data->ec, sig, siglen, digest, dlen);
+    if (ctx->tls_version > 0) {
+        sigbuf = OPENSSL_malloc(siglen);
+        if (sigbuf == NULL)
+            return 0;
+        BUF_reverse(sigbuf, sig, siglen);
+        verify_sig = sigbuf;
+    }
+
+    ret = internal_pkey_ec_cp_verify(ctx->key_data->ec, verify_sig, siglen, digest, dlen);
+    OPENSSL_free(sigbuf);
+    return ret;
 }
 
 typedef void (*fptr_t)(void);
@@ -390,6 +433,8 @@ static const OSSL_DISPATCH id_signature_functions[] = {
     { OSSL_FUNC_SIGNATURE_FREECTX, (fptr_t)signature_free },
     { OSSL_FUNC_SIGNATURE_GET_CTX_PARAMS, (fptr_t)signature_get_ctx_params },
     { OSSL_FUNC_SIGNATURE_GETTABLE_CTX_PARAMS, (fptr_t)signature_gettable_ctx_params},
+    { OSSL_FUNC_SIGNATURE_SET_CTX_PARAMS, (fptr_t)signature_set_ctx_params },
+    { OSSL_FUNC_SIGNATURE_SETTABLE_CTX_PARAMS, (fptr_t)signature_settable_ctx_params},
     { OSSL_FUNC_SIGNATURE_DIGEST_SIGN_INIT, (fptr_t)signature_digest_sign_init },
     { OSSL_FUNC_SIGNATURE_DIGEST_SIGN_UPDATE, (fptr_t)signature_digest_sign_update },
     { OSSL_FUNC_SIGNATURE_DIGEST_SIGN_FINAL, (fptr_t)signature_digest_sign_final },
@@ -408,21 +453,12 @@ const OSSL_ALGORITHM GOST_prov_signature[] = {
         NULL,
         id_signature_functions
     },
-    {
-        SN_id_GostR3410_2012_256
-        ":" SN_id_tc26_signwithdigest_gost3410_2012_256
-        ":" LN_id_tc26_signwithdigest_gost3410_2012_256
-        ":" OID_id_tc26_signwithdigest_gost3410_2012_256,
-        NULL,
-        id_signature_functions
-    },
-    {
-        SN_id_GostR3410_2012_512
-        ":" SN_id_tc26_signwithdigest_gost3410_2012_512
-        ":" LN_id_tc26_signwithdigest_gost3410_2012_512
-        ":" OID_id_tc26_signwithdigest_gost3410_2012_512,
-        NULL,
-        id_signature_functions
-    },
+    { GOST_SIGALG_2012_256A, NULL, id_signature_functions },
+    { GOST_SIGALG_2012_256B, NULL, id_signature_functions },
+    { GOST_SIGALG_2012_256C, NULL, id_signature_functions },
+    { GOST_SIGALG_2012_256D, NULL, id_signature_functions },
+    { GOST_SIGALG_2012_512A, NULL, id_signature_functions },
+    { GOST_SIGALG_2012_512B, NULL, id_signature_functions },
+    { GOST_SIGALG_2012_512C, NULL, id_signature_functions },
     { NULL, NULL, NULL }
 };

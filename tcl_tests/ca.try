@@ -24,8 +24,8 @@ if {[info exists env(ALG_LIST)]} {
 		"openprov" {
 			set all_algorithms {
 				gost2001:A gost2001:B gost2001:C gost2001:XA gost2001:XB
-				gost2012_256:A gost2012_256:B gost2012_256:C gost2012_256:TCA gost2012_256:TCB gost2012_256:TCC gost2012_256:TCD
-				gost2012_512:A gost2012_512:B gost2012_512:C
+				gostr34102012_256a gostr34102012_256b gostr34102012_256c gostr34102012_256d
+				gostr34102012_512a gostr34102012_512b gostr34102012_512c
 			}
 
 			set run_all 0

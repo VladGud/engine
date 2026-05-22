@@ -289,9 +289,18 @@ proc extract_oids {filename {format PEM} {offset 0}} {
 # Формирует список параметров для openssl req необходимый для формирования 
 # ключа c указанным алгоритмом и параметрами
 #  
-proc keygen_params {alg} {	
-	return [split $alg :] 
-}	
+proc keygen_params {alg} {
+	switch -exact $alg {
+		gostr34102012_256a {return [list gost2012_256 TCA]}
+		gostr34102012_256b {return [list gost2012_256 TCB]}
+		gostr34102012_256c {return [list gost2012_256 TCC]}
+		gostr34102012_256d {return [list gost2012_256 TCD]}
+		gostr34102012_512a {return [list gost2012_512 A]}
+		gostr34102012_512b {return [list gost2012_512 B]}
+		gostr34102012_512c {return [list gost2012_512 C]}
+		default {return [split $alg :]}
+	}
+}
 
 proc generate_key {params filename} {
 	set alg [lindex $params 0]
@@ -588,6 +597,13 @@ proc param_pubkey {alg} {
 		gost2012_512:0 {return param_pubkey12_512_0}
 		gost2012_512:A {return param_pubkey12_512_A}
 		gost2012_512:B {return param_pubkey12_512_B}
+		gostr34102012_256a {return param_pubkey01_cpa}
+		gostr34102012_256b {return param_pubkey01_cpb}
+		gostr34102012_256c {return param_pubkey01_cpc}
+		gostr34102012_256d {return "1.2.643.7.1.2.1.1.4"}
+		gostr34102012_512a {return param_pubkey12_512_A}
+		gostr34102012_512b {return param_pubkey12_512_B}
+		gostr34102012_512c {return "1.2.643.7.1.2.1.2.3"}
 	}
 }
 
@@ -601,6 +617,8 @@ proc param_hash_long_name {hash_alg {pk_alg {}}} {
     switch -glob $pk_alg {
 	gost2012_256:TC* {return}
 	gost2012_512:C {return}
+	gostr34102012_256* {return}
+	gostr34102012_512c {return}
     }
     switch -glob $hash_alg {
         *hash_94 {return "id-GostR3411-94-CryptoProParamSet"}
@@ -631,10 +649,17 @@ proc pubkey_long_name {alg} {
 		gost2012_256:TCB {return "GOST R 34.10-2012 (256 bit) ParamSet B"}
 		gost2012_256:TCC {return "GOST R 34.10-2012 (256 bit) ParamSet C"}
 		gost2012_256:TCD {return "GOST R 34.10-2012 (256 bit) ParamSet D"}
+		gostr34102012_256a {return "GOST R 34.10-2012 (256 bit) ParamSet A"}
+		gostr34102012_256b {return "GOST R 34.10-2012 (256 bit) ParamSet B"}
+		gostr34102012_256c {return "GOST R 34.10-2012 (256 bit) ParamSet C"}
+		gostr34102012_256d {return "GOST R 34.10-2012 (256 bit) ParamSet D"}
 		#gost2012_512:0 {return param_pubkey12_512_0}
 		gost2012_512:A {return 	"GOST R 34.10-2012 (512 bit) ParamSet A"}
 		gost2012_512:B {return 	"GOST R 34.10-2012 (512 bit) ParamSet B"}
 		gost2012_512:C {return  "GOST R 34.10-2012 (512 bit) ParamSet C"}
+		gostr34102012_512a {return  "GOST R 34.10-2012 (512 bit) ParamSet A"}
+		gostr34102012_512b {return  "GOST R 34.10-2012 (512 bit) ParamSet B"}
+		gostr34102012_512c {return  "GOST R 34.10-2012 (512 bit) ParamSet C"}
 	}
 }
 
@@ -661,6 +686,8 @@ proc param_hash {alg} {
     switch -glob $alg {
         gost2012_256:* {return hash_12_256}
         gost2012_512:* {return hash_12_512}
+        gostr34102012_256* {return hash_12_256}
+        gostr34102012_512* {return hash_12_512}
         * {return param_hash_94}
     }
 }

@@ -27,6 +27,13 @@ static OSSL_FUNC_keymgmt_load_fn keymgmt_load;
 static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gost2001_operation_name;
 static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gost2012_256_operation_name;
 static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gost2012_512_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_256a_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_256b_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_256c_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_256d_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_512a_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_512b_operation_name;
+static OSSL_FUNC_keymgmt_query_operation_name_fn keymgmt_gostr34102012_512c_operation_name;
 static OSSL_FUNC_keymgmt_validate_fn keymgmt_validate;
 
 typedef struct gost_gen_ctx_st {
@@ -66,20 +73,59 @@ static const char *keymgmt_gost2001_operation_name(int operation_id)
     return NULL;
 }
 
-static void *keymgmt_new(void *vprovctx, int type)
+#define DEFINE_TLS_KEYMGMT_OPERATION_NAME(fn_name, sigalg_name)           \
+    static const char *fn_name(int operation_id)                          \
+    {                                                                     \
+        switch (operation_id) {                                           \
+        case OSSL_OP_SIGNATURE:                                           \
+            return sigalg_name;                                           \
+        case OSSL_OP_KEYEXCH:                                             \
+            return "ECDHE";                                              \
+        default:                                                          \
+            return NULL;                                                  \
+        }                                                                 \
+    }
+
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_256a_operation_name,
+                                  GOST_SIGALG_2012_256A)
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_256b_operation_name,
+                                  GOST_SIGALG_2012_256B)
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_256c_operation_name,
+                                  GOST_SIGALG_2012_256C)
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_256d_operation_name,
+                                  GOST_SIGALG_2012_256D)
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_512a_operation_name,
+                                  GOST_SIGALG_2012_512A)
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_512b_operation_name,
+                                  GOST_SIGALG_2012_512B)
+DEFINE_TLS_KEYMGMT_OPERATION_NAME(keymgmt_gostr34102012_512c_operation_name,
+                                  GOST_SIGALG_2012_512C)
+
+static void *keymgmt_new(void *vprovctx, int type, int param_nid)
 {
     GOST_KEY_DATA *key_data = NULL;
+    EC_KEY *forced_ec = NULL;
 
     key_data = OPENSSL_zalloc(sizeof(GOST_KEY_DATA));
     if (!key_data)
         return NULL;
 
     key_data->type = type;
-    key_data->param_nid = NID_undef;
-    key_data->ec = EC_KEY_new();
-    if (!key_data->ec) {
-        OPENSSL_free(key_data);
-        return NULL;
+    key_data->param_nid = param_nid;
+
+    if (param_nid != NID_undef) {
+        forced_ec = internal_ec_paramgen(param_nid);
+        if (forced_ec == NULL) {
+            OPENSSL_free(key_data);
+            return NULL;
+        }
+        key_data->ec = forced_ec;
+    } else {
+        key_data->ec = EC_KEY_new();
+        if (!key_data->ec) {
+            OPENSSL_free(key_data);
+            return NULL;
+        }
     }
 
     return key_data;
@@ -427,24 +473,31 @@ static int get_security_bits(GOST_KEY_DATA *key_data, OSSL_PARAM *p)
 
 static int get_default_digest_name(const GOST_KEY_DATA *key_data, OSSL_PARAM *p)
 {
+    const GOST_TLS_SIGALG_DESC *sigalg_desc;
     const char *digest = NULL;
 
-    switch (key_data->type) {
-    case NID_id_GostR3410_2001:
-    case NID_id_GostR3410_2001DH:
-        digest = SN_id_GostR3411_94;
-        break;
+    sigalg_desc = gost_tls_sigalg_desc_by_paramset(key_data->type, key_data->param_nid);
+    if (sigalg_desc != NULL)
+        digest = sigalg_desc->digest_name;
 
-    case NID_id_GostR3410_2012_256:
-        digest = SN_id_GostR3411_2012_256;
-        break;
+    if (digest == NULL) {
+        switch (key_data->type) {
+        case NID_id_GostR3410_2001:
+        case NID_id_GostR3410_2001DH:
+            digest = SN_id_GostR3411_94;
+            break;
 
-    case NID_id_GostR3410_2012_512:
-        digest = SN_id_GostR3411_2012_512;
-        break;
+        case NID_id_GostR3410_2012_256:
+            digest = SN_id_GostR3411_2012_256;
+            break;
 
-    default:
-        return 0;
+        case NID_id_GostR3410_2012_512:
+            digest = SN_id_GostR3411_2012_512;
+            break;
+
+        default:
+            return 0;
+        }
     }
 
     return OSSL_PARAM_set_utf8_string(p, digest);
@@ -753,16 +806,19 @@ static int keymgmt_gen_set_template(void *genctx, void *template)
 }
 
 typedef void (*fptr_t)(void);
-#define MAKE_KEYMGMT_FUNCTIONS(alg, type, operation_name_fn)                                   \
+#define MAKE_KEYMGMT_FUNCTIONS(alg, type, forced_param_nid, operation_name_fn)                 \
     static OSSL_FUNC_keymgmt_gen_init_fn alg##_gen_init;                                       \
     static void *alg##_gen_init(void *provctx, int selection, const OSSL_PARAM params[])       \
     {                                                                                          \
-        return keymgmt_gen_init(selection, params, type);                                      \
+        GOST_GEN_CTX *gctx = keymgmt_gen_init(selection, params, type);                        \
+        if (gctx != NULL && forced_param_nid != NID_undef)                                     \
+            gctx->sign_param_nid = forced_param_nid;                                            \
+        return gctx;                                                                            \
     }                                                                                          \
     static OSSL_FUNC_keymgmt_new_fn alg##_new;                                                 \
     static void *alg##_new(void *provctx)                                                      \
     {                                                                                          \
-        return keymgmt_new(provctx, type);                                                     \
+        return keymgmt_new(provctx, type, forced_param_nid);                                   \
     }                                                                                          \
     static const OSSL_DISPATCH id_##alg##_keymgmt_functions[] = {                              \
         { OSSL_FUNC_KEYMGMT_NEW, (fptr_t)alg##_new},                                           \
@@ -788,12 +844,34 @@ typedef void (*fptr_t)(void);
         OSSL_DISPATCH_END                                                                      \
     };
 
-MAKE_KEYMGMT_FUNCTIONS(gost2001, NID_id_GostR3410_2001, keymgmt_gost2001_operation_name);
-MAKE_KEYMGMT_FUNCTIONS(gost2001dh, NID_id_GostR3410_2001DH, NULL);
-MAKE_KEYMGMT_FUNCTIONS(gost2012_256, NID_id_GostR3410_2012_256,
+MAKE_KEYMGMT_FUNCTIONS(gost2001, NID_id_GostR3410_2001, NID_undef,
+                       keymgmt_gost2001_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gost2001dh, NID_id_GostR3410_2001DH, NID_undef, NULL);
+MAKE_KEYMGMT_FUNCTIONS(gost2012_256, NID_id_GostR3410_2012_256, NID_undef,
                        keymgmt_gost2012_256_operation_name);
-MAKE_KEYMGMT_FUNCTIONS(gost2012_512, NID_id_GostR3410_2012_512,
+MAKE_KEYMGMT_FUNCTIONS(gost2012_512, NID_id_GostR3410_2012_512, NID_undef,
                        keymgmt_gost2012_512_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_256a, NID_id_GostR3410_2012_256,
+                       NID_id_tc26_gost_3410_2012_256_paramSetA,
+                       keymgmt_gostr34102012_256a_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_256b, NID_id_GostR3410_2012_256,
+                       NID_id_tc26_gost_3410_2012_256_paramSetB,
+                       keymgmt_gostr34102012_256b_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_256c, NID_id_GostR3410_2012_256,
+                       NID_id_tc26_gost_3410_2012_256_paramSetC,
+                       keymgmt_gostr34102012_256c_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_256d, NID_id_GostR3410_2012_256,
+                       NID_id_tc26_gost_3410_2012_256_paramSetD,
+                       keymgmt_gostr34102012_256d_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_512a, NID_id_GostR3410_2012_512,
+                       NID_id_tc26_gost_3410_2012_512_paramSetA,
+                       keymgmt_gostr34102012_512a_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_512b, NID_id_GostR3410_2012_512,
+                       NID_id_tc26_gost_3410_2012_512_paramSetB,
+                       keymgmt_gostr34102012_512b_operation_name);
+MAKE_KEYMGMT_FUNCTIONS(gostr34102012_512c, NID_id_GostR3410_2012_512,
+                       NID_id_tc26_gost_3410_2012_512_paramSetC,
+                       keymgmt_gostr34102012_512c_operation_name);
 
 /* The OSSL_ALGORITHM for the provider's operation query function */
 const OSSL_ALGORITHM GOST_prov_keymgmt[] = {
@@ -801,5 +879,12 @@ const OSSL_ALGORITHM GOST_prov_keymgmt[] = {
     { ALG_NAME_GOST2001DH, NULL, id_gost2001dh_keymgmt_functions },
     { ALG_NAME_GOST2012_256, NULL, id_gost2012_256_keymgmt_functions },
     { ALG_NAME_GOST2012_512, NULL, id_gost2012_512_keymgmt_functions },
+    { GOST_SIGALG_2012_256A, NULL, id_gostr34102012_256a_keymgmt_functions },
+    { GOST_SIGALG_2012_256B, NULL, id_gostr34102012_256b_keymgmt_functions },
+    { GOST_SIGALG_2012_256C, NULL, id_gostr34102012_256c_keymgmt_functions },
+    { GOST_SIGALG_2012_256D, NULL, id_gostr34102012_256d_keymgmt_functions },
+    { GOST_SIGALG_2012_512A, NULL, id_gostr34102012_512a_keymgmt_functions },
+    { GOST_SIGALG_2012_512B, NULL, id_gostr34102012_512b_keymgmt_functions },
+    { GOST_SIGALG_2012_512C, NULL, id_gostr34102012_512c_keymgmt_functions },
     { NULL, NULL, NULL }
 };

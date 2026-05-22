@@ -31,7 +31,7 @@ if {[info exists env(ALG_LIST)]} {
 	set alg_list $env(ALG_LIST)
 } else {
 	switch -exact [test_target_name] {
-		"openprov" {set alg_list { gost2012_256:TCA gost2012_256:TCB gost2012_256:TCC gost2012_256:TCD gost2012_512:A gost2012_512:B gost2012_512:C }}
+		"openprov" {set alg_list { gostr34102012_256a gostr34102012_256b gostr34102012_256c gostr34102012_256d gostr34102012_512a gostr34102012_512b gostr34102012_512c }}
 	}
 }
 
@@ -43,6 +43,13 @@ array set alg_to_rfc {
 	"gost2012_512:A"   "gostr34102012_512a"
 	"gost2012_512:B"   "gostr34102012_512b"
 	"gost2012_512:C"   "gostr34102012_512c"
+	"gostr34102012_256a" "gostr34102012_256a"
+	"gostr34102012_256b" "gostr34102012_256b"
+	"gostr34102012_256c" "gostr34102012_256c"
+	"gostr34102012_256d" "gostr34102012_256d"
+	"gostr34102012_512a" "gostr34102012_512a"
+	"gostr34102012_512b" "gostr34102012_512b"
+	"gostr34102012_512c" "gostr34102012_512c"
 }
 
 set suites {TLS_GOSTR341112_256_WITH_MAGMA_MGM_L TLS_GOSTR341112_256_WITH_KUZNYECHIK_MGM_L TLS_GOSTR341112_256_WITH_MAGMA_MGM_S TLS_GOSTR341112_256_WITH_KUZNYECHIK_MGM_S}
@@ -51,7 +58,7 @@ set proto_list {"TLSv1.3"}
 set expected_proto "TLSv1.3"
 
 if {![file exists sslCA/cacert.pem]} {
-	makeCA sslCA gost2012_256:A
+	makeCA sslCA gostr34102012_256a
 } else {
 	set ::test::ca sslCA
 }
@@ -159,7 +166,7 @@ foreach proto $proto_list {
 			} 0 [list 0 $groups($group) $proto $suite]
 
 			if {[string match *gost* $alg]} {
-				set alg_cli_list [list $alg gost2012_256:TCB gost2012_512:B]
+				set alg_cli_list [list $alg gostr34102012_256b gostr34102012_512b]
 			} else {
 				set alg_cli_list $alg
 			}
